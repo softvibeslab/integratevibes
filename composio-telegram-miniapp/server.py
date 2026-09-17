@@ -6,13 +6,24 @@ import json
 import os
 import re
 import shutil
+import sqlite3
 import subprocess
 import threading
 import time
+from html import escape
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
+
+from integratevibes.integration_service import (
+    IntegrationService,
+    IntegrationServiceError,
+    verify_zernio_webhook,
+)
+from integratevibes.integrations_store import IntegrationsStore
+from integratevibes.telegram_auth import TelegramAuthError, verify_init_data
+from integratevibes.zernio_client import ZernioClient, ZernioError
 
 ROOT = Path(__file__).resolve().parent
 ACCESS_TOKEN = os.environ.get("MINIAPP_ACCESS_TOKEN", "")
@@ -23,6 +34,25 @@ STATUS_CACHE_SECONDS = 30
 CATALOG_CACHE_SECONDS = 3600
 CATALOG_LIMIT = 2000
 TOOLKIT_SLUG = re.compile(r"^[a-z0-9_]{1,80}$")
+TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
+ALLOWED_TELEGRAM_USERS = {
+    int(value.strip())
+    for value in os.environ.get("TELEGRAM_ALLOWED_USERS", "").split(",")
+    if value.strip().isdigit()
+}
+ZERNIO_API_KEY = os.environ.get("ZERNIO_API_KEY", "")
+ZERNIO_WEBHOOK_SECRET = os.environ.get("ZERNIO_WEBHOOK_SECRET", "")
+INTEGRATIONS_DB_PATH = os.environ.get(
+    "INTEGRATIONS_DB_PATH", "/var/lib/softvibes-miniapp/integrations.db"
+)
+PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "https://auth.softvibes.art")
+ZERNIO_SERVICE = None
+if ZERNIO_API_KEY:
+    ZERNIO_SERVICE = IntegrationService(
+        ZernioClient(ZERNIO_API_KEY),
+        IntegrationsStore(INTEGRATIONS_DB_PATH),
+        public_base_url=PUBLIC_BASE_URL,
+    )
 
 # Notebookvibes recommendations remain highlighted inside the complete catalog.
 # Every other connectable slug must first come from Composio's live catalog.
@@ -275,6 +305,55 @@ class Handler(BaseHTTPRequestHandler):
     def authorized(self) -> bool:
         return bool(ACCESS_TOKEN) and self.headers.get("X-Miniapp-Token", "") == ACCESS_TOKEN
 
+    def telegram_user_id(self) -> int | None:
+        if not TELEGRAM_BOT_TOKEN or not ALLOWED_TELEGRAM_USERS:
+            return None
+        init_data = self.headers.get("X-Telegram-Init-Data", "")
+        try:
+            user = verify_init_data(
+                init_data,
+                TELEGRAM_BOT_TOKEN,
+                allowed_user_ids=ALLOWED_TELEGRAM_USERS,
+            )
+        except (TelegramAuthError, ValueError):
+            return None
+        return user.id
+
+    def read_json(self, *, max_bytes: int = 4096) -> dict:
+        length = int(self.headers.get("Content-Length", "0"))
+        if length < 0 or length > max_bytes:
+            raise ValueError("request_too_large")
+        payload = json.loads(self.rfile.read(length) or b"{}")
+        if not isinstance(payload, dict):
+            raise ValueError("invalid_json")
+        return payload
+
+    def require_zernio(self) -> tuple[int, IntegrationService] | None:
+        user_id = self.telegram_user_id()
+        if user_id is None:
+            self.send_json({"ok": False, "error": "telegram_auth_required"}, 401)
+            return None
+        if ZERNIO_SERVICE is None:
+            self.send_json({"ok": False, "error": "zernio_not_configured"}, 503)
+            return None
+        return user_id, ZERNIO_SERVICE
+
+    def send_callback_page(self, *, ok: bool, title: str, detail: str) -> None:
+        safe_title = escape(title)
+        safe_detail = escape(detail)
+        accent = "#54b887" if ok else "#d56d68"
+        body = f"""<!doctype html><html lang=\"es\"><head><meta charset=\"utf-8\">
+<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">
+<meta name=\"color-scheme\" content=\"light dark\"><title>{safe_title}</title>
+<style>body{{font-family:system-ui;background:#0f1012;color:#f4f2ec;display:grid;place-items:center;min-height:100vh;margin:0;padding:24px}}main{{max-width:420px;text-align:center}}i{{display:block;width:54px;height:54px;border-radius:50%;background:{accent};margin:0 auto 18px}}h1{{font-size:24px}}p{{color:#a7a9b0;line-height:1.5}}</style></head><body><main><i></i><h1>{safe_title}</h1><p>{safe_detail}</p><p>Ya puedes cerrar esta ventana y volver a Telegram.</p></main></body></html>""".encode("utf-8")
+        self.send_response(200 if ok else 400)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store")
+        self.security_headers()
+        self.end_headers()
+        self.wfile.write(body)
+
     def do_GET(self) -> None:
         path = urlparse(self.path).path
         if path == "/health":
@@ -309,10 +388,106 @@ class Handler(BaseHTTPRequestHandler):
             except Exception as exc:
                 self.send_json({"ok": False, "error": str(exc)}, 502)
             return
+        if path == "/api/zernio/status":
+            context = self.require_zernio()
+            if context is None:
+                return
+            user_id, service = context
+            try:
+                self.send_json(service.status(user_id))
+            except (IntegrationServiceError, ZernioError):
+                self.send_json({"ok": False, "error": "zernio_status_failed"}, 502)
+            return
+        if path == "/integrations/zernio/callback":
+            if ZERNIO_SERVICE is None:
+                self.send_callback_page(
+                    ok=False,
+                    title="Zernio no está configurado",
+                    detail="Vuelve a Telegram e inténtalo cuando la integración esté disponible.",
+                )
+                return
+            query = parse_qs(urlparse(self.path).query)
+            try:
+                result = ZERNIO_SERVICE.finish_callback(
+                    state=(query.get("state") or [""])[0],
+                    returned_profile_id=(query.get("profileId") or [None])[0],
+                    returned_platform=(query.get("connected") or query.get("platform") or [None])[0],
+                    error=(query.get("error") or [None])[0],
+                )
+                if result["ok"]:
+                    self.send_callback_page(
+                        ok=True,
+                        title="Cuenta conectada",
+                        detail="Regresa a Telegram; Integratevibes actualizará el estado automáticamente.",
+                    )
+                else:
+                    self.send_callback_page(
+                        ok=False,
+                        title="No se completó la conexión",
+                        detail="Regresa a Telegram y vuelve a intentarlo.",
+                    )
+            except (IntegrationServiceError, ZernioError):
+                self.send_callback_page(
+                    ok=False,
+                    title="Enlace inválido o vencido",
+                    detail="Regresa a Telegram y genera una conexión nueva.",
+                )
+            return
         self.send_json({"ok": False, "error": "not_found"}, 404)
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
+        if path == "/webhooks/zernio":
+            if ZERNIO_SERVICE is None:
+                self.send_json({"ok": False, "error": "invalid_webhook"}, 400)
+                return
+            try:
+                length = int(self.headers.get("Content-Length", "0"))
+                if length < 0 or length > 16_384:
+                    raise ValueError("invalid content length")
+                body = self.rfile.read(length)
+                signature = self.headers.get("X-Zernio-Signature", "")
+                if not verify_zernio_webhook(body, signature, ZERNIO_WEBHOOK_SECRET):
+                    self.send_json({"ok": False, "error": "invalid_signature"}, 401)
+                    return
+                payload = json.loads(body)
+                if not isinstance(payload, dict):
+                    raise ValueError("webhook body must be an object")
+                event_id = str(payload.get("id") or self.headers.get("X-Zernio-Event-Id", ""))
+                if not event_id:
+                    raise ValueError("missing event id")
+                accepted = ZERNIO_SERVICE.store.record_webhook_event(event_id)
+                self.send_json({"ok": True, "accepted": accepted})
+            except (json.JSONDecodeError, TypeError, ValueError):
+                self.send_json({"ok": False, "error": "invalid_webhook"}, 400)
+            except sqlite3.OperationalError:
+                self.send_json({"ok": False, "error": "webhook_temporarily_unavailable"}, 503)
+            return
+
+        if path in {
+            "/api/zernio/connect",
+            "/api/zernio/telegram/start",
+            "/api/zernio/telegram/check",
+        }:
+            context = self.require_zernio()
+            if context is None:
+                return
+            user_id, service = context
+            try:
+                payload = self.read_json()
+                if path == "/api/zernio/connect":
+                    result = service.create_connect(user_id, str(payload.get("platform", "")))
+                elif path == "/api/zernio/telegram/start":
+                    result = service.start_telegram(user_id)
+                else:
+                    result = service.check_telegram(user_id, str(payload.get("code", "")))
+                self.send_json(result)
+            except (IntegrationServiceError, ValueError):
+                self.send_json({"ok": False, "error": "invalid_integration_request"}, 400)
+            except ZernioError:
+                self.send_json({"ok": False, "error": "zernio_request_failed"}, 502)
+            return
+
         if path != "/api/link":
             self.send_json({"ok": False, "error": "not_found"}, 404)
             return

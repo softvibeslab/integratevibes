@@ -10,71 +10,101 @@
   <style>
     :root{
       --bg:var(--tg-theme-bg-color,#0f1012);--surface:var(--tg-theme-secondary-bg-color,#181a1f);
+      --surface-strong:color-mix(in srgb,var(--surface) 82%,var(--text) 3%);
       --text:var(--tg-theme-text-color,#f4f2ec);--muted:var(--tg-theme-hint-color,#9a9da5);
       --link:var(--tg-theme-link-color,#d1a759);--button:var(--tg-theme-button-color,#c99a45);
       --button-text:var(--tg-theme-button-text-color,#111216);--line:color-mix(in srgb,var(--muted) 28%,transparent);
       --ok:#54b887;--wait:#d5a34e;--bad:#d56d68;--radius:16px;
     }
     *{box-sizing:border-box}html,body{margin:0;min-height:100%;background:var(--bg);color:var(--text)}
-    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;padding:calc(18px + env(safe-area-inset-top)) 16px calc(28px + env(safe-area-inset-bottom));touch-action:manipulation}
+    html{scroll-behavior:smooth}body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;padding:calc(18px + env(safe-area-inset-top)) 16px calc(28px + env(safe-area-inset-bottom));touch-action:manipulation}
+    .skip{position:fixed;left:12px;top:-60px;z-index:10;background:var(--text);color:var(--bg);padding:10px 14px;border-radius:9px}.skip:focus{top:12px}
     main{max-width:680px;margin:0 auto}.kicker{font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--link);font-weight:700;margin:4px 0 10px}
-    h1{font-size:30px;line-height:1.08;letter-spacing:-.035em;margin:0 0 10px;text-wrap:balance}p{margin:0;color:var(--muted);line-height:1.5}
-    .summary{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:22px 0 14px;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
-    .summary strong{font-size:13px}.summary span{font-size:12px;color:var(--muted)}
-    button,input{font:inherit}.refresh{border:1px solid var(--line);background:transparent;color:var(--link);padding:0 12px;min-height:44px;border-radius:10px;cursor:pointer;font-weight:750}
-    .refresh[disabled]{opacity:.55;cursor:wait}.refresh:focus-visible,.connect:focus-visible,.filter:focus-visible,.search input:focus-visible{outline:2px solid var(--link);outline-offset:2px}
+    h1{font-size:30px;line-height:1.08;letter-spacing:-.035em;margin:0 0 10px;text-wrap:balance}h2{font-size:20px;margin:0 0 6px;letter-spacing:-.02em}p{margin:0;color:var(--muted);line-height:1.5}
+    button,input{font:inherit}button{touch-action:manipulation}.module-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:22px 0 16px;padding:5px;border:1px solid var(--line);border-radius:14px;background:var(--surface)}
+    .module-tab{min-height:48px;border:0;border-radius:10px;background:transparent;color:var(--muted);cursor:pointer;font-weight:750;padding:7px 10px}.module-tab small{display:block;font-weight:500;margin-top:2px}.module-tab[aria-selected="true"]{background:color-mix(in srgb,var(--link) 17%,var(--surface));color:var(--text);box-shadow:0 1px 0 color-mix(in srgb,var(--text) 8%,transparent)}
+    [role="tabpanel"][hidden]{display:none}.module-intro{margin:0 2px 14px}.summary{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:14px 0;padding:14px 16px;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+    .summary strong{font-size:13px}.summary span{font-size:12px;color:var(--muted)}.refresh,.secondary{border:1px solid var(--line);background:transparent;color:var(--link);padding:0 12px;min-height:44px;border-radius:10px;cursor:pointer;font-weight:750;white-space:nowrap}
+    button[disabled]{opacity:.55;cursor:wait}.module-tab:focus-visible,.refresh:focus-visible,.secondary:focus-visible,.connect:focus-visible,.filter:focus-visible,.search input:focus-visible,.dialog-close:focus-visible{outline:2px solid var(--link);outline-offset:2px}
     .search{position:relative;margin-bottom:10px}.search label{display:block;font-size:12px;font-weight:750;margin:0 0 7px;color:var(--text)}
-    .search input{width:100%;min-height:48px;border:1px solid var(--line);border-radius:13px;background:var(--surface);color:var(--text);padding:0 14px;font-size:16px;caret-color:var(--link)}
-    .search input::placeholder{color:var(--muted)}
-    .filters{display:flex;gap:8px;overflow-x:auto;padding:2px 1px 12px;scrollbar-width:none}.filters::-webkit-scrollbar{display:none}
-    .filter{flex:0 0 auto;min-height:40px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--muted);padding:0 13px;cursor:pointer;font-weight:700;font-size:12px}
+    .search input{width:100%;min-height:48px;border:1px solid var(--line);border-radius:13px;background:var(--surface);color:var(--text);padding:0 14px;font-size:16px;caret-color:var(--link)}.search input::placeholder{color:var(--muted)}
+    .filters{display:flex;gap:8px;overflow-x:auto;padding:2px 1px 12px;scrollbar-width:none}.filters::-webkit-scrollbar{display:none}.filter{flex:0 0 auto;min-height:40px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--muted);padding:0 13px;cursor:pointer;font-weight:700;font-size:12px}
     .filter[aria-pressed="true"]{background:color-mix(in srgb,var(--link) 15%,transparent);border-color:color-mix(in srgb,var(--link) 55%,transparent);color:var(--text)}
-    .results-meta{display:flex;justify-content:space-between;gap:12px;align-items-center;margin:2px 2px 10px;color:var(--muted);font-size:12px}.results-meta strong{color:var(--text)}
+    .results-meta{display:flex;justify-content:space-between;gap:12px;align-items:center;margin:2px 2px 10px;color:var(--muted);font-size:12px}.results-meta strong{color:var(--text)}
     .list{display:grid;gap:10px}.item{display:grid;grid-template-columns:44px minmax(0,1fr);gap:12px;padding:15px;border:1px solid var(--line);border-radius:var(--radius);background:var(--surface)}
-    .mark{width:44px;height:44px;display:grid;place-items:center;border-radius:12px;background:color-mix(in srgb,var(--link) 13%,transparent);font-weight:800;color:var(--link);letter-spacing:-.03em}
-    .item-main{min-width:0}.item-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.name{font-weight:750;font-size:15px}.category{margin-top:2px;color:var(--muted);font-size:11px}
-    .description{margin-top:9px;font-size:13px;line-height:1.45;color:var(--muted)}.capabilities{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 12px;padding:0;list-style:none}
-    .capabilities li{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:4px 8px}
-    .item-foot{display:flex;align-items:center;justify-content:space-between;gap:10px}.state{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12px}.dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex:0 0 auto}
-    .item[data-state="active"] .dot{background:var(--ok)}.item[data-state="pending"] .dot{background:var(--wait)}.item[data-state="expired"] .dot{background:var(--bad)}
-    .connect{min-height:44px;border:0;border-radius:11px;background:var(--button);color:var(--button-text);padding:0 14px;font-weight:750;cursor:pointer}.connect[disabled]{opacity:.55;cursor:wait}
-    .item[data-state="active"] .connect{background:transparent;color:var(--link);border:1px solid var(--line)}
-    .empty{display:none;text-align:center;border:1px dashed var(--line);border-radius:var(--radius);padding:28px 18px;color:var(--muted)}.empty.show{display:block}.empty strong{display:block;color:var(--text);margin-bottom:5px}
-    .load-more{display:none;width:100%;min-height:46px;margin-top:12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--text);font-weight:750;cursor:pointer}.load-more.show{display:block}.load-more:focus-visible{outline:2px solid var(--link);outline-offset:2px}
-    .foot{margin-top:18px;padding:0 4px;font-size:12px}.message{margin-top:12px;border-radius:12px;padding:12px 14px;display:none;font-size:12px}.message.show{display:block}.message.error{background:color-mix(in srgb,var(--bad) 16%,transparent);color:var(--text)}.message.ok{background:color-mix(in srgb,var(--ok) 13%,transparent);color:var(--text)}
+    .mark{width:44px;height:44px;display:grid;place-items:center;border-radius:12px;background:color-mix(in srgb,var(--link) 13%,transparent);font-weight:800;color:var(--link);letter-spacing:-.03em}.item-main{min-width:0}.item-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.name{font-weight:750;font-size:15px;overflow-wrap:anywhere}.category{margin-top:2px;color:var(--muted);font-size:11px}
+    .description{margin-top:9px;font-size:13px;line-height:1.45;color:var(--muted)}.capabilities{display:flex;flex-wrap:wrap;gap:6px;margin:10px 0 12px;padding:0;list-style:none}.capabilities li{font-size:11px;color:var(--muted);border:1px solid var(--line);border-radius:999px;padding:4px 8px}
+    .item-foot{display:flex;align-items:center;justify-content:space-between;gap:10px}.state{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12px;min-width:0}.state span{overflow-wrap:anywhere}.dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex:0 0 auto}
+    .item[data-state="active"] .dot,.item[data-state="connected"] .dot{background:var(--ok)}.item[data-state="pending"] .dot{background:var(--wait)}.item[data-state="expired"] .dot,.item[data-state="needs_reconnection"] .dot{background:var(--bad)}
+    .connect{min-height:44px;border:0;border-radius:11px;background:var(--button);color:var(--button-text);padding:0 14px;font-weight:750;cursor:pointer;white-space:nowrap}.item[data-state="active"] .connect,.item[data-state="connected"] .connect{background:transparent;color:var(--link);border:1px solid var(--line)}
+    .notice{padding:13px 14px;border:1px solid color-mix(in srgb,var(--wait) 45%,transparent);border-radius:12px;background:color-mix(in srgb,var(--wait) 8%,transparent);font-size:12px;color:var(--muted);line-height:1.5;margin:0 0 12px}.notice strong{color:var(--text)}
+    .empty{display:none;text-align:center;border:1px dashed var(--line);border-radius:var(--radius);padding:28px 18px;color:var(--muted)}.empty.show{display:block}.empty strong{display:block;color:var(--text);margin-bottom:5px}.load-more{display:none;width:100%;min-height:46px;margin-top:12px;border:1px solid var(--line);border-radius:12px;background:var(--surface);color:var(--text);font-weight:750;cursor:pointer}.load-more.show{display:block}
+    .foot{margin-top:18px;padding:0 4px;font-size:12px}.message{position:sticky;bottom:calc(10px + env(safe-area-inset-bottom));z-index:3;margin-top:12px;border-radius:12px;padding:12px 14px;display:none;font-size:12px;box-shadow:0 8px 28px #0005}.message.show{display:block}.message.error{background:color-mix(in srgb,var(--bad) 26%,var(--surface));color:var(--text)}.message.ok{background:color-mix(in srgb,var(--ok) 20%,var(--surface));color:var(--text)}
     .skeleton{position:relative;overflow:hidden;min-height:142px}.skeleton:after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,color-mix(in srgb,var(--text) 7%,transparent),transparent);animation:scan 1.1s infinite}@keyframes scan{from{transform:translateX(-100%)}to{transform:translateX(100%)}}
-    @media(prefers-reduced-motion:reduce){.skeleton:after{animation:none}}
+    dialog{width:min(calc(100% - 32px),440px);border:1px solid var(--line);border-radius:18px;background:var(--surface-strong);color:var(--text);padding:22px;box-shadow:0 24px 80px #0009}dialog::backdrop{background:#000a}.dialog-close{position:absolute;right:12px;top:12px;width:44px;height:44px;border:0;border-radius:10px;background:transparent;color:var(--muted);font-size:22px;cursor:pointer}.code{display:block;margin:18px 0;padding:16px;border:1px dashed var(--link);border-radius:12px;text-align:center;font:800 22px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.08em;user-select:all}.dialog-actions{display:grid;gap:9px}.dialog-actions a,.dialog-actions button{display:grid;place-items:center;min-height:46px;border-radius:11px;text-decoration:none;font-weight:750}.dialog-actions a{background:var(--button);color:var(--button-text)}
+    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.skeleton:after{animation:none}}
     @media(min-width:640px){.item{grid-template-columns:48px minmax(0,1fr)}.mark{width:48px;height:48px}}
   </style>
 </head>
 <body>
+<a class="skip" href="#main">Saltar al contenido</a>
 <main id="main">
   <div class="kicker">Notebookvibes · Integraciones</div>
-  <h1>Conecta fuentes de conocimiento</h1>
-  <p>Busca una herramienta y autorízala en su página oficial. La Mini App solo crea el vínculo y consulta su estado; no ejecuta acciones sobre tus datos.</p>
+  <h1>Conecta tus herramientas</h1>
+  <p>Autoriza cada servicio en su página oficial. Integratevibes crea el vínculo y consulta su estado; no publica ni ejecuta acciones sin tu aprobación.</p>
 
-  <section class="summary" aria-live="polite">
-    <div><strong id="headline">Comprobando conexiones</strong><br><span id="subline">Espera un momento…</span></div>
-    <button class="refresh" id="refresh" type="button">Actualizar</button>
+  <nav class="module-tabs" role="tablist" aria-label="Módulos de integración" aria-orientation="horizontal">
+    <button class="module-tab" id="tab-composio" type="button" role="tab" tabindex="0" aria-selected="true" aria-controls="panel-composio" data-module="composio">Herramientas<small>Composio</small></button>
+    <button class="module-tab" id="tab-zernio" type="button" role="tab" tabindex="-1" aria-selected="false" aria-controls="panel-zernio" data-module="zernio">Redes sociales<small>Zernio</small></button>
+  </nav>
+
+  <section id="panel-composio" role="tabpanel" aria-labelledby="tab-composio">
+    <div class="module-intro"><h2>Fuentes de conocimiento</h2><p>Documentos, correo, notas y espacios de trabajo para tus investigaciones.</p></div>
+    <section class="summary" aria-live="polite">
+      <div><strong id="headline">Comprobando conexiones</strong><br><span id="subline">Espera un momento…</span></div>
+      <button class="refresh" id="refresh" type="button">Actualizar</button>
+    </section>
+    <div class="search">
+      <label for="integration-search">Buscar integraciones</label>
+      <input id="integration-search" name="integration-search" type="search" inputmode="search" autocomplete="off" placeholder="Ejemplo: documentos, Slack o YouTube…">
+    </div>
+    <div class="filters" id="filters" aria-label="Elegir vista del catálogo"></div>
+    <div class="results-meta" aria-live="polite"><span id="results-count">Preparando catálogo…</span><strong id="active-filter"></strong></div>
+    <section class="list" id="list" aria-label="Integraciones Composio disponibles">
+      <article class="item skeleton" aria-hidden="true"></article><article class="item skeleton" aria-hidden="true"></article><article class="item skeleton" aria-hidden="true"></article>
+    </section>
+    <div class="empty" id="empty"><strong>No encontramos esa integración</strong><span>Prueba otro nombre o necesidad, o abre la vista Todas.</span></div>
+    <button class="load-more" id="load-more" type="button">Mostrar más integraciones</button>
+    <p class="foot">Explora el catálogo de Composio o empieza por las integraciones recomendadas para investigar, contrastar y guardar conocimiento.</p>
   </section>
 
-  <div class="search">
-    <label for="integration-search">Buscar integraciones</label>
-    <input id="integration-search" name="integration-search" type="search" inputmode="search" autocomplete="off" placeholder="Ejemplo: documentos, Slack o YouTube…">
-  </div>
-  <div class="filters" id="filters" aria-label="Elegir vista del catálogo"></div>
-  <div class="results-meta" aria-live="polite"><span id="results-count">Preparando catálogo…</span><strong id="active-filter"></strong></div>
-
-  <section class="list" id="list" aria-label="Integraciones disponibles">
-    <article class="item skeleton" aria-hidden="true"></article>
-    <article class="item skeleton" aria-hidden="true"></article>
-    <article class="item skeleton" aria-hidden="true"></article>
+  <section id="panel-zernio" role="tabpanel" aria-labelledby="tab-zernio" hidden>
+    <div class="module-intro"><h2>Canales sociales</h2><p>Conecta una cuenta por red para administrar contenido desde Zernio.</p></div>
+    <section class="summary" aria-live="polite">
+      <div><strong id="zernio-headline">Comprobando redes</strong><br><span id="zernio-subline">Solo visible dentro de Telegram</span></div>
+      <button class="refresh" id="zernio-refresh" type="button">Actualizar</button>
+    </section>
+    <p class="notice"><strong>Antes de reconectar:</strong> una cuenta nueva reemplaza la anterior dentro de este perfil. En TikTok, ese reemplazo puede eliminar historial previo de analítica e inbox.</p>
+    <section class="list" id="zernio-list" aria-label="Redes sociales disponibles">
+      <article class="item skeleton" aria-hidden="true"></article><article class="item skeleton" aria-hidden="true"></article>
+    </section>
+    <div class="empty" id="zernio-empty"><strong>Zernio necesita Telegram</strong><span>Abre esta Mini App desde el bot autorizado para gestionar redes.</span></div>
+    <p class="foot">OAuth, consentimiento y 2FA se completan directamente con cada red. Integratevibes no recibe tus contraseñas.</p>
   </section>
-  <div class="empty" id="empty"><strong>No encontramos esa integración</strong><span>Prueba otro nombre o necesidad, o abre la vista Todas.</span></div>
-  <button class="load-more" id="load-more" type="button">Mostrar más integraciones</button>
+
   <div class="message" id="message" role="status" aria-live="polite"></div>
-  <p class="foot">Explora el catálogo de Composio o empieza por las integraciones recomendadas para investigar, contrastar y guardar conocimiento en Notebookvibes.</p>
 </main>
+
+<dialog id="telegram-dialog" aria-labelledby="telegram-title">
+  <button class="dialog-close" id="telegram-close" type="button" aria-label="Cerrar">×</button>
+  <h2 id="telegram-title">Conecta Telegram con Zernio</h2>
+  <p>Añade el bot oficial como administrador de tu canal o grupo. Después envía al bot el código seguido de <code>@tucanal</code>. El código vence en 15 minutos.</p>
+  <output class="code" id="telegram-code">—</output>
+  <div class="dialog-actions">
+    <a id="telegram-bot-link" href="https://t.me/ZernioScheduleBot" target="_blank" rel="noopener noreferrer">Abrir bot oficial</a>
+    <button class="secondary" id="telegram-check" type="button">Ya envié el código</button>
+  </div>
+</dialog>
 <script src="/app.js"></script>
 </body>
 </html>
