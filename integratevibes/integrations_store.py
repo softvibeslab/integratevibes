@@ -51,6 +51,12 @@ class IntegrationsStore:
                     event_id TEXT PRIMARY KEY,
                     received_at INTEGER NOT NULL
                 );
+                CREATE TABLE IF NOT EXISTS zernio_sessions (
+                    token_hash TEXT PRIMARY KEY,
+                    telegram_user_id INTEGER NOT NULL,
+                    expires_at INTEGER NOT NULL,
+                    created_at INTEGER NOT NULL
+                );
                 CREATE TABLE IF NOT EXISTS zernio_telegram_codes (
                     code_hash TEXT PRIMARY KEY,
                     telegram_user_id INTEGER NOT NULL,
@@ -60,6 +66,33 @@ class IntegrationsStore:
                 );
                 """
             )
+
+    def save_session(self, token: str, telegram_user_id: int, expires_at: int) -> None:
+        token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        now = int(time.time())
+        with self._connect() as connection:
+            connection.execute("DELETE FROM zernio_sessions WHERE expires_at <= ?", (now,))
+            connection.execute(
+                """
+                INSERT OR REPLACE INTO zernio_sessions (
+                    token_hash, telegram_user_id, expires_at, created_at
+                ) VALUES (?, ?, ?, ?)
+                """,
+                (token_hash, telegram_user_id, expires_at, now),
+            )
+
+    def get_session_user(self, token: str, *, now: int | None = None) -> int | None:
+        if not token:
+            return None
+        current = int(time.time()) if now is None else now
+        token_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+        with self._connect() as connection:
+            connection.execute("DELETE FROM zernio_sessions WHERE expires_at <= ?", (current,))
+            row = connection.execute(
+                "SELECT telegram_user_id FROM zernio_sessions WHERE token_hash = ?",
+                (token_hash,),
+            ).fetchone()
+        return int(row["telegram_user_id"]) if row else None
 
     def get_profile(self, telegram_user_id: int) -> str | None:
         with self._connect() as connection:

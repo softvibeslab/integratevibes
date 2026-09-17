@@ -11,8 +11,8 @@ Cada proveedor conserva rutas, credenciales y lógica separadas. La interfaz com
 
 ## Seguridad
 
-- Las rutas Zernio validan `Telegram.WebApp.initData` con HMAC-SHA256.
-- El backend aplica la allowlist `TELEGRAM_ALLOWED_USERS`.
+- Las rutas Zernio validan `Telegram.WebApp.initData` con HMAC-SHA256 para emitir una sesión backend aleatoria de dos horas; el navegador la conserva solo en memoria y SQLite guarda únicamente su hash.
+- El backend aplica la allowlist `TELEGRAM_ALLOWED_USERS` tanto al emitir como al usar la sesión.
 - Cada usuario Telegram se mapea a un perfil Zernio independiente.
 - La API key de Zernio y el token del bot existen solo en el archivo de entorno del servicio.
 - Los callbacks usan un estado aleatorio, ligado al usuario/perfil/plataforma, con 15 minutos de vigencia y un solo uso.

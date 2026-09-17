@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import secrets
 import shutil
 import sqlite3
 import subprocess
@@ -32,6 +33,7 @@ PORT = int(os.environ.get("MINIAPP_PORT", "49234"))
 COMPOSIO = shutil.which("composio") or str(Path.home() / ".local/bin/composio")
 STATUS_CACHE_SECONDS = 30
 CATALOG_CACHE_SECONDS = 3600
+ZERNIO_SESSION_TTL_SECONDS = 7200
 CATALOG_LIMIT = 2000
 TOOLKIT_SLUG = re.compile(r"^[a-z0-9_]{1,80}$")
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
@@ -328,8 +330,17 @@ class Handler(BaseHTTPRequestHandler):
             raise ValueError("invalid_json")
         return payload
 
+    def session_user_id(self) -> int | None:
+        if ZERNIO_SERVICE is None or not ALLOWED_TELEGRAM_USERS:
+            return None
+        token = self.headers.get("X-Zernio-Session", "")
+        user_id = ZERNIO_SERVICE.store.get_session_user(token)
+        if user_id not in ALLOWED_TELEGRAM_USERS:
+            return None
+        return user_id
+
     def require_zernio(self) -> tuple[int, IntegrationService] | None:
-        user_id = self.telegram_user_id()
+        user_id = self.session_user_id() or self.telegram_user_id()
         if user_id is None:
             self.send_json({"ok": False, "error": "telegram_auth_required"}, 401)
             return None
@@ -437,6 +448,25 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:
         path = urlparse(self.path).path
+        if path == "/api/zernio/session":
+            user_id = self.telegram_user_id()
+            if user_id is None:
+                self.send_json({"ok": False, "error": "telegram_auth_required"}, 401)
+                return
+            if ZERNIO_SERVICE is None:
+                self.send_json({"ok": False, "error": "zernio_not_configured"}, 503)
+                return
+            token = secrets.token_urlsafe(32)
+            expires_at = int(time.time()) + ZERNIO_SESSION_TTL_SECONDS
+            ZERNIO_SERVICE.store.save_session(token, user_id, expires_at)
+            self.send_json(
+                {
+                    "ok": True,
+                    "sessionToken": token,
+                    "expiresIn": ZERNIO_SESSION_TTL_SECONDS,
+                }
+            )
+            return
         if path == "/webhooks/zernio":
             if ZERNIO_SERVICE is None:
                 self.send_json({"ok": False, "error": "invalid_webhook"}, 400)

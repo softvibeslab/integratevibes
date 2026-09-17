@@ -11,6 +11,33 @@
     ...headers,
     "X-Telegram-Init-Data": tg?.initData || "",
   };
+  let zernioSessionToken = "";
+
+  async function ensureZernioSession() {
+    if (zernioSessionToken) return;
+    const response = await fetch("/api/zernio/session", {
+      method: "POST",
+      headers: telegramHeaders,
+      body: "{}",
+    });
+    const data = await response.json();
+    if (!response.ok || !data.ok || !data.sessionToken) {
+      throw new Error(publicError(data.error));
+    }
+    zernioSessionToken = data.sessionToken;
+  }
+
+  async function zernioFetch(path, options = {}) {
+    await ensureZernioSession();
+    return fetch(path, {
+      ...options,
+      headers: {
+        ...headers,
+        ...(options.headers || {}),
+        "X-Zernio-Session": zernioSessionToken,
+      },
+    });
+  }
   const labels = {
     active: "Conectado",
     connected: "Conectado",
@@ -268,7 +295,7 @@
     zernioRefresh.disabled = true;
     zernioRefresh.textContent = "Actualizando…";
     try {
-      const response = await fetch("/api/zernio/status", { headers: telegramHeaders });
+      const response = await zernioFetch("/api/zernio/status");
       const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(publicError(data.error));
       zernioPlatforms = data.platforms || [];
@@ -311,8 +338,8 @@
     const old = button.textContent;
     button.textContent = "Generando…";
     try {
-      const response = await fetch("/api/zernio/telegram/start", {
-        method: "POST", headers: telegramHeaders, body: "{}",
+      const response = await zernioFetch("/api/zernio/telegram/start", {
+        method: "POST", body: "{}",
       });
       const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(publicError(data.error));
@@ -341,8 +368,8 @@
     const old = button.textContent;
     button.textContent = "Generando…";
     try {
-      const response = await fetch("/api/zernio/connect", {
-        method: "POST", headers: telegramHeaders, body: JSON.stringify({ platform: platform.platform }),
+      const response = await zernioFetch("/api/zernio/connect", {
+        method: "POST", body: JSON.stringify({ platform: platform.platform }),
       });
       const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(publicError(data.error));
@@ -424,8 +451,8 @@
     telegramCheck.disabled = true;
     telegramCheck.textContent = "Comprobando…";
     try {
-      const response = await fetch("/api/zernio/telegram/check", {
-        method: "POST", headers: telegramHeaders, body: JSON.stringify({ code: activeTelegramCode }),
+      const response = await zernioFetch("/api/zernio/telegram/check", {
+        method: "POST", body: JSON.stringify({ code: activeTelegramCode }),
       });
       const data = await response.json();
       if (!response.ok || !data.ok) throw new Error(publicError(data.error));

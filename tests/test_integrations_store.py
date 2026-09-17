@@ -91,6 +91,22 @@ class IntegrationsStoreTests(unittest.TestCase):
         self.assertNotIn("old-event", ids)
         self.assertIn("fresh-event", ids)
 
+    def test_zernio_session_is_hashed_bound_and_expiring(self) -> None:
+        self.store.save_session(
+            token="session-secret",
+            telegram_user_id=42,
+            expires_at=200,
+        )
+        self.assertEqual(self.store.get_session_user("session-secret", now=100), 42)
+        self.assertIsNone(self.store.get_session_user("wrong", now=100))
+        with self.store._connect() as connection:
+            stored = connection.execute("SELECT token_hash FROM zernio_sessions").fetchone()[0]
+        self.assertNotEqual(stored, "session-secret")
+        self.assertIsNone(self.store.get_session_user("session-secret", now=200))
+        with self.store._connect() as connection:
+            remaining = connection.execute("SELECT COUNT(*) FROM zernio_sessions").fetchone()[0]
+        self.assertEqual(remaining, 0)
+
     def test_telegram_code_is_hashed_expiring_and_bound_to_user_profile(self) -> None:
         self.store.save_telegram_code(
             code="ZRN-SECRET",

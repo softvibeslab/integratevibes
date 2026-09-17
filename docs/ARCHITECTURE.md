@@ -5,6 +5,7 @@
 ```text
 Telegram WebApp initData
   -> verificación HMAC + antigüedad + allowlist
+  -> sesión backend aleatoria de 2 horas (solo hash en SQLite)
   -> telegram_user_id
   -> SQLite zernio_profiles
   -> profileId Zernio
@@ -47,6 +48,7 @@ Los webhooks son una señal; la UI sigue reconciliando el estado contra `GET /v1
 SQLite contiene únicamente:
 
 - mapping inmutable Telegram user ID -> Zernio profile ID;
+- hashes SHA-256 de sesiones backend aleatorias, ligadas al usuario y con dos horas de vigencia;
 - estados efímeros de callback de un solo uso, con purga de vencidos;
 - hashes SHA-256 de códigos Telegram ligados a usuario/perfil, con máximo de 15 minutos;
 - IDs de webhooks procesados, con retención de 90 días.

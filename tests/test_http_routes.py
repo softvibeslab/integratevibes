@@ -27,6 +27,13 @@ SPEC.loader.exec_module(server)
 class FakeStore:
     def __init__(self) -> None:
         self.fail = False
+        self.sessions: dict[str, int] = {}
+
+    def save_session(self, token: str, telegram_user_id: int, expires_at: int) -> None:
+        self.sessions[token] = telegram_user_id
+
+    def get_session_user(self, token: str) -> int | None:
+        return self.sessions.get(token)
 
     def record_webhook_event(self, event_id: str) -> bool:
         if self.fail:
@@ -67,9 +74,17 @@ class HttpRoutesTests(unittest.TestCase):
         cls.httpd.shutdown()
         cls.thread.join(timeout=2)
 
-    def request(self, path: str, *, method: str = "GET", body: dict | None = None, auth: bool = True):
+    def request(
+        self,
+        path: str,
+        *,
+        method: str = "GET",
+        body: dict | None = None,
+        auth: bool = True,
+        extra_headers: dict[str, str] | None = None,
+    ):
         data = json.dumps(body).encode() if body is not None else None
-        headers = {"Content-Type": "application/json"}
+        headers = {"Content-Type": "application/json", **(extra_headers or {})}
         if auth:
             headers["X-Telegram-Init-Data"] = signed_init_data(user_id=42)
         request = Request(self.base + path, data=data, headers=headers, method=method)
@@ -107,6 +122,45 @@ class HttpRoutesTests(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertTrue(payload["ok"])
         self.assertEqual(self.fake.status_users[-1], 42)
+
+    def test_zernio_session_allows_requests_without_reusing_init_data(self) -> None:
+        status, payload = self.request("/api/zernio/session", method="POST", body={})
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["sessionToken"])
+
+        status, payload = self.request(
+            "/api/zernio/status",
+            auth=False,
+            extra_headers={"X-Zernio-Session": payload["sessionToken"]},
+        )
+        self.assertEqual(status, 200)
+        self.assertTrue(payload["ok"])
+        self.assertEqual(self.fake.status_users[-1], 42)
+
+    def test_zernio_rejects_invalid_session_token(self) -> None:
+        status, payload = self.request(
+            "/api/zernio/status",
+            auth=False,
+            extra_headers={"X-Zernio-Session": "invalid"},
+        )
+        self.assertEqual(status, 401)
+        self.assertEqual(payload["error"], "telegram_auth_required")
+
+    def test_zernio_session_rechecks_allowlist(self) -> None:
+        status, payload = self.request("/api/zernio/session", method="POST", body={})
+        self.assertEqual(status, 200)
+        original = server.ALLOWED_TELEGRAM_USERS
+        server.ALLOWED_TELEGRAM_USERS = set()
+        try:
+            status, denied = self.request(
+                "/api/zernio/status",
+                auth=False,
+                extra_headers={"X-Zernio-Session": payload["sessionToken"]},
+            )
+        finally:
+            server.ALLOWED_TELEGRAM_USERS = original
+        self.assertEqual(status, 401)
+        self.assertEqual(denied["error"], "telegram_auth_required")
 
     def test_zernio_connect_uses_verified_user_and_platform(self) -> None:
         status, payload = self.request(

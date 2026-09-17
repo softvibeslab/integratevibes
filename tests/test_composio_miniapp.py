@@ -120,7 +120,7 @@ class CatalogTests(unittest.TestCase):
         self.assertNotIn("MINIAPP_ACCESS_TOKEN", html + javascript)
         self.assertNotIn("ZERNIO_API_KEY", html + javascript)
         self.assertIn('fetch("/api/status"', javascript)
-        self.assertIn('fetch("/api/zernio/status"', javascript)
+        self.assertIn('zernioFetch("/api/zernio/status"', javascript)
         self.assertIn('id="tab-zernio"', html)
         self.assertIn('id="panel-zernio"', html)
         self.assertIn('tabindex="0"', html)
@@ -130,6 +130,11 @@ class CatalogTests(unittest.TestCase):
         self.assertIn('event.key === "Home"', javascript)
         self.assertIn('event.key === "End"', javascript)
         self.assertIn("nextTab.focus()", javascript)
+        self.assertIn("/api/zernio/session", javascript)
+        self.assertIn('"X-Zernio-Session"', javascript)
+        self.assertIn("zernioSessionToken", javascript)
+        self.assertNotIn("localStorage", javascript)
+        self.assertNotIn("sessionStorage", javascript)
         self.assertIn('X-Telegram-Init-Data', javascript)
 
     def test_catalog_serializes_as_json(self) -> None:
