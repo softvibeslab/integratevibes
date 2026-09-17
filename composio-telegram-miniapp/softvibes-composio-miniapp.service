@@ -1,0 +1,36 @@
+[Unit]
+Description=Softvibes Composio Telegram Mini App
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=softvibes-miniapp
+Group=softvibes-miniapp
+WorkingDirectory=/opt/softvibes-composio-miniapp
+EnvironmentFile=/etc/softvibes-composio-miniapp.env
+ExecStart=/usr/bin/python3 /opt/softvibes-composio-miniapp/server.py
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=45
+TimeoutStopSec=30
+
+NoNewPrivileges=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectKernelLogs=true
+ProtectControlGroups=true
+ProtectClock=true
+RestrictSUIDSGID=true
+LockPersonality=true
+ReadWritePaths=/var/lib/softvibes-miniapp
+UMask=0077
+TasksMax=64
+MemoryMax=512M
+
+[Install]
+WantedBy=multi-user.target

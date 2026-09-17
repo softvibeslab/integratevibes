@@ -1,0 +1,21 @@
+auth.softvibes.art {
+	encode gzip zstd
+
+	request_body {
+		max_size 16KB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+		Cache-Control "no-store"
+		-Server
+	}
+
+	@internal path /internal/*
+	respond @internal 404
+
+	reverse_proxy 127.0.0.1:4192
+}
